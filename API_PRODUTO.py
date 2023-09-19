@@ -1,4 +1,7 @@
 from flask import Flask, jsonify, request
+from flask_jwt_extended import (
+    JWTManager, create_access_token, jwt_required, get_jwt_identity
+)
 
 app = Flask(__name__)
 
@@ -8,6 +11,8 @@ carrinho = {}
 pedidos = []
 avaliacoes = {}
 comentarios = {}
+usuarios = []
+tokens_jwt = [] 
 
 # Endpoints para Produtos
 @app.route('/produtos', methods=['GET'])
@@ -170,6 +175,58 @@ def get_comentarios(id):
     if id in comentarios:
         return jsonify(comentarios[id])
     return jsonify({'message': 'Comentários não encontrados para este produto'}), 404
+
+class Usuario:
+    def __init__(self, id, nome, email, senha):
+        self.id = id
+        self.nome = nome
+        self.email = email
+        self.senha = senha
+
+# Endpoint para cadastrar um novo usuário
+@app.route('/usuarios/novo', methods=['POST'])
+def cadastrar_usuario():
+    data = request.get_json()
+    if 'nome' in data and 'email' in data and 'senha' in data:
+        novo_usuario = Usuario(len(usuarios) + 1, data['nome'], data['email'], data['senha'])
+        usuarios.append(novo_usuario)
+        return jsonify({'message': 'Usuário cadastrado com sucesso'}), 201
+    return jsonify({'message': 'Campos obrigatórios (nome, email e senha) não fornecidos'}), 400
+
+# Endpoint para exibir todos os usuários cadastrados
+@app.route('/usuarios', methods=['GET'])
+@jwt_required()
+def exibir_usuarios():
+    if usuarios:
+        lista_usuarios = [{'id': usuario.id, 'nome': usuario.nome, 'email': usuario.email} for usuario in usuarios]
+        return jsonify(lista_usuarios)
+    return jsonify({'message': 'Nenhum usuário encontrado'}), 404
+
+# Endpoint para exibir um usuário específico
+@app.route('/usuarios/<int:id>', methods=['GET'])
+@jwt_required()
+def exibir_usuario(id):
+    usuario = next((u for u in usuarios if u.id == id), None)
+    if usuario:
+        return jsonify({'id': usuario.id, 'nome': usuario.nome, 'email': usuario.email})
+    return jsonify({'message': 'Usuário não encontrado'}), 404
+
+# Endpoint para verificar o login de um usuário e gerar um token JWT
+@app.route('/login', methods=['POST'])
+def verificar_login():
+    data = request.get_json()
+    email = data.get('email')
+    senha = data.get('senha')
+
+    usuario = next((u for u in usuarios if u.email == email and u.senha == senha), None)
+    if usuario:
+        token = create_access_token(identity=usuario.id)
+        tokens_jwt.append(token)  # Adiciona o token à lista de tokens JWT
+        return jsonify({'message': 'Login bem-sucedido', 'access_token': token})
+    return jsonify({'message': 'Credenciais inválidas'}), 401
+
+def usuario_logado(pToken):
+    return pToken in tokens_jwt
 
 if __name__ == '__main__':
     app.run(debug=True)
