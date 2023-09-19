@@ -225,8 +225,5 @@ def verificar_login():
         return jsonify({'message': 'Login bem-sucedido', 'access_token': token})
     return jsonify({'message': 'Credenciais inválidas'}), 401
 
-def usuario_logado(pToken):
-    return pToken in tokens_jwt
-
 if __name__ == '__main__':
     app.run(debug=True)
