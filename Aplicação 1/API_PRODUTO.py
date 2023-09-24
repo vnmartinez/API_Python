@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+import requests
 from flask_jwt_extended import (
     JWTManager, create_access_token, jwt_required, get_jwt_identity
 )
@@ -13,6 +14,9 @@ avaliacoes = {}
 comentarios = {}
 usuarios = []
 tokens_jwt = [] 
+
+# Substitua CHAVE_API pelo seu token da ExchangeRate-API
+CHAVE_API = 'c94b00ef414eb7272d1bcca0'
 
 # Endpoints para Produtos
 @app.route('/produtos', methods=['GET'])
@@ -217,6 +221,51 @@ def verificar_login():
     data = request.get_json()
     email = data.get('email')
     senha = data.get('senha')
+    
+@app.route('/entrega/<string:cep>', methods=['GET'])
+def obter_informacoes_entrega(cep):
+    # Remove quaisquer caracteres não numéricos do CEP
+    cep = ''.join(filter(str.isdigit, cep))
+
+    # Verifica se o CEP tem exatamente 8 dígitos
+    if len(cep) != 8:
+        return jsonify({'message': 'CEP no formato inválido'}), 400
+
+    # Faz a chamada à API Via CEP para obter os dados de entrega
+    url = f'https://viacep.com.br/ws/{cep}/json/'
+    response = requests.get(url)
+
+    # Verifica se a resposta da API foi bem-sucedida
+    if response.status_code == 200:
+        dados_entrega = response.json()
+        return jsonify(dados_entrega)
+    elif response.status_code == 400:
+        return jsonify({'message': 'CEP Inexistente'}), 404
+    else:
+        return jsonify({'message': 'Erro ao obter informações de entrega'}), 500
+    
+@app.route('/conversao/<float:valor>/<moeda_origem>/<moeda_destino>', methods=['GET'])
+def converter_moeda(valor, moeda_origem, moeda_destino):
+    # Monta a URL do endpoint de conversão
+    url = f'https://v6.exchangerate-api.com/v6/{CHAVE_API}/latest/{moeda_origem}'
+
+    # Faz uma chamada GET para obter as taxas de câmbio em relação à moeda de origem
+    response = requests.get(url)
+
+    # Verifica se a chamada à API foi bem-sucedida
+    if response.status_code == 200:
+        dados_taxas = response.json()
+        taxas = dados_taxas['conversion_rates']
+
+        # Verifica se a moeda de destino está presente nas taxas de câmbio
+        if moeda_destino in taxas:
+            taxa_conversao = taxas[moeda_destino]
+            valor_convertido = valor * taxa_conversao
+            return jsonify({'valor_convertido': valor_convertido, 'moeda_destino': moeda_destino})
+        else:
+            return jsonify({'message': 'Moeda de destino não encontrada'}), 404
+    else:
+        return jsonify({'message': 'Erro ao obter taxas de câmbio'}), 500
 
     usuario = next((u for u in usuarios if u.email == email and u.senha == senha), None)
     if usuario:
